@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Agentic Search</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #f5f7fa;
+      color: #1a1a2e;
+      min-height: 100vh;
+      padding: 40px 20px;
+    }
+
+    .container { max-width: 1100px; margin: 0 auto; }
+
+    h1 {
+      font-size: 2rem;
+      font-weight: 700;
+      margin-bottom: 6px;
+      color: #1a1a2e;
+    }
+
+    .subtitle {
+      color: #666;
+      margin-bottom: 32px;
+      font-size: 0.95rem;
+    }
+
+    /* search bar */
+    .search-bar {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 32px;
+    }
+
+    .search-bar input {
+      flex: 1;
+      padding: 14px 18px;
+      border: 2px solid #e0e0e0;
+      border-radius: 10px;
+      font-size: 1rem;
+      outline: none;
+      transition: border 0.2s;
+      background: white;
+    }
+
+    .search-bar input:focus { border-color: #4f46e5; }
+
+    .search-bar button {
+      padding: 14px 28px;
+      background: #4f46e5;
+      color: white;
+      border: none;
+      border-radius: 10px;
+      font-size: 1rem;
+      cursor: pointer;
+      font-weight: 600;
+      transition: background 0.2s;
+    }
+
+    .search-bar button:hover { background: #4338ca; }
+    .search-bar button:disabled { background: #a5a3d0; cursor: not-allowed; }
+
+    /* status message */
+    #status {
+      text-align: center;
+      color: #4f46e5;
+      font-size: 0.95rem;
+      margin-bottom: 20px;
+      min-height: 24px;
+    }
+
+    /* results info */
+    #info {
+      font-size: 0.9rem;
+      color: #666;
+      margin-bottom: 14px;
+    }
+
+    /* table */
+    .table-wrap {
+      overflow-x: auto;
+      border-radius: 12px;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background: white;
+      font-size: 0.9rem;
+    }
+
+    thead tr { background: #4f46e5; color: white; }
+    thead th {
+      padding: 14px 16px;
+      text-align: left;
+      font-weight: 600;
+      text-transform: capitalize;
+    }
+
+    tbody tr:nth-child(even) { background: #f9f9fb; }
+    tbody tr:hover { background: #eef0ff; }
+
+    tbody td {
+      padding: 12px 16px;
+      border-bottom: 1px solid #f0f0f0;
+      vertical-align: top;
+      max-width: 220px;
+    }
+
+    /* source link */
+    .source-link {
+      display: inline-block;
+      font-size: 0.78rem;
+      color: #4f46e5;
+      text-decoration: none;
+      background: #eef0ff;
+      padding: 2px 8px;
+      border-radius: 4px;
+      max-width: 180px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .source-link:hover { text-decoration: underline; }
+
+    /* null values */
+    .null-val { color: #bbb; font-style: italic; font-size: 0.82rem; }
+
+    /* error */
+    .error {
+      background: #fff0f0;
+      border: 1px solid #ffc0c0;
+      color: #c00;
+      padding: 16px 20px;
+      border-radius: 10px;
+      margin-top: 20px;
+    }
+
+    /* example queries */
+    .examples {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 28px;
+    }
+
+    .examples span { font-size: 0.85rem; color: #888; margin-right: 4px; }
+
+    .chip {
+      padding: 6px 14px;
+      background: white;
+      border: 1px solid #ddd;
+      border-radius: 20px;
+      font-size: 0.83rem;
+      cursor: pointer;
+      transition: all 0.15s;
+      color: #444;
+    }
+
+    .chip:hover { border-color: #4f46e5; color: #4f46e5; background: #eef0ff; }
+  </style>
+</head>
+<body>
+<div class="container">
+
+  <h1>🔍 Agentic Search</h1>
+  <p class="subtitle">Enter a topic and get a structured table of entities extracted from the web</p>
+
+  <div class="search-bar">
+    <input id="queryInput" type="text" placeholder='Try "AI startups in healthcare" or "top pizza places in Brooklyn"' />
+    <button id="searchBtn" onclick="runSearch()">Search</button>
+  </div>
+
+  <!-- example chips -->
+  <div class="examples">
+    <span>Try:</span>
+    <div class="chip" onclick="setQuery('AI startups in healthcare')">AI startups in healthcare</div>
+    <div class="chip" onclick="setQuery('top pizza places in Brooklyn')">top pizza places in Brooklyn</div>
+    <div class="chip" onclick="setQuery('open source database tools')">open source database tools</div>
+    <div class="chip" onclick="setQuery('electric vehicle companies 2024')">electric vehicle companies 2024</div>
+  </div>
+
+  <div id="status"></div>
+  <div id="info"></div>
+  <div id="results"></div>
+
+</div>
+
+<script>
+  function setQuery(q) {
+    document.getElementById("queryInput").value = q;
+    runSearch();
+  }
+
+  document.getElementById("queryInput").addEventListener("keydown", e => {
+    if (e.key === "Enter") runSearch();
+  });
+
+  async function runSearch() {
+    const query = document.getElementById("queryInput").value.trim();
+    if (!query) return;
+
+    const btn = document.getElementById("searchBtn");
+    const status = document.getElementById("status");
+    const info = document.getElementById("info");
+    const results = document.getElementById("results");
+
+    // reset UI
+    btn.disabled = true;
+    btn.textContent = "Searching...";
+    results.innerHTML = "";
+    info.textContent = "";
+
+    // loading steps so user knows what's happening
+    const steps = [
+      "🔎 Searching the web...",
+      "📄 Scraping pages with Jina...",
+      "🧠 Extracting entities with AI...",
+      "🗂️ Building your table..."
+    ];
+    let i = 0;
+    status.textContent = steps[0];
+    const interval = setInterval(() => {
+      i = Math.min(i + 1, steps.length - 1);
+      status.textContent = steps[i];
+    }, 2500);
+
+    try {
+      const res = await fetch("/search", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ query })
+      });
+
+      clearInterval(interval);
+
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.detail || "Something went wrong");
+      }
+
+      const data = await res.json();
+      status.textContent = "";
+      renderTable(data, info, results);
+
+    } catch (err) {
+      clearInterval(interval);
+      status.textContent = "";
+      results.innerHTML = `<div class="error">❌ ${err.message}</div>`;
+    } finally {
+      btn.disabled = false;
+      btn.textContent = "Search";
+    }
+  }
+
+  function renderTable(data, info, results) {
+    if (!data.results || data.results.length === 0) {
+      results.innerHTML = `<div class="error">No entities found. Try a different query.</div>`;
+      return;
+    }
+
+    info.textContent = `Found ${data.total} entities · Columns auto-detected for "${data.query}"`;
+
+    // columns = schema + source
+    const cols = [...data.schema, "source"];
+
+    let html = `<div class="table-wrap"><table>`;
+
+    // header
+    html += `<thead><tr>`;
+    cols.forEach(c => { html += `<th>${c}</th>`; });
+    html += `</tr></thead>`;
+
+    // rows
+    html += `<tbody>`;
+    data.results.forEach(entity => {
+      html += `<tr>`;
+      cols.forEach(col => {
+        const val = entity[col];
+        if (col === "source" && val) {
+          // show all sources split by |
+          const srcs = val.split(" | ").filter(Boolean);
+          html += `<td>`;
+          srcs.forEach((s, i) => {
+            html += `<a class="source-link" href="${s.trim()}" target="_blank" title="${s.trim()}">
+                       🔗 source${srcs.length > 1 ? " " + (i+1) : ""}
+                     </a><br/>`;
+          });
+          html += `</td>`;
+        } else if (!val || val === "null" || val === null) {
+          html += `<td><span class="null-val">—</span></td>`;
+        } else {
+          html += `<td>${val}</td>`;
+        }
+      });
+      html += `</tr>`;
+    });
+
+    html += `</tbody></table></div>`;
+    results.innerHTML = html;
+  }
+</script>
+</body>
+</html>
